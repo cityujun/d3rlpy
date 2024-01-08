@@ -5,8 +5,35 @@ from ..types import GymEnv
 
 __all__ = [
     "evaluate_qlearning_with_environment",
+    "evaluate_qlearning_with_energyplus",
     "evaluate_transformer_with_environment",
 ]
+
+
+def evaluate_qlearning_with_energyplus(
+    algo: QLearningAlgoProtocol,
+    env: GymEnv,
+):
+    env_id = env.get_wrapper_attr('id')
+    observation, _ = env.reset()
+    episode_reward = 0.0
+    episode_total_power = []
+
+    while True:
+        action = algo.predict(np.expand_dims(observation, axis=0))[0]
+        observation, reward, done, truncated, info = env.step(action)
+        
+        if done or truncated:
+            break
+        
+        episode_reward += float(reward)
+        if env_id == 'DataCenter':
+            episode_total_power.append(float(observation[-3] * 100))
+        elif env_id == 'MixedUse':
+            episode_total_power.append(float(info['obs']['Fa_Pw_All'] / 1000))
+    
+    env.close()
+    return episode_reward, float(np.mean(episode_total_power))
 
 
 def evaluate_qlearning_with_environment(

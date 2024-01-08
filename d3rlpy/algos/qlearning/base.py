@@ -33,7 +33,11 @@ from ...logging import (
     FileAdapterFactory,
     LoggerAdapterFactory,
 )
-from ...metrics import EvaluatorProtocol, evaluate_qlearning_with_environment
+from ...metrics import (
+    EvaluatorProtocol,
+    evaluate_qlearning_with_environment,
+    evaluate_qlearning_with_energyplus,
+)
 from ...models.torch import Policy
 from ...torch_utility import (
     TorchMiniBatch,
@@ -376,6 +380,7 @@ class QLearningAlgoBase(
         show_progress: bool = True,
         save_interval: int = 1,
         evaluators: Optional[Dict[str, EvaluatorProtocol]] = None,
+        eval_env: Optional[GymEnv] = None,
         callback: Optional[Callable[[Self, int, int], None]] = None,
         epoch_callback: Optional[Callable[[Self, int, int], None]] = None,
     ) -> List[Tuple[int, Dict[str, float]]]:
@@ -418,6 +423,7 @@ class QLearningAlgoBase(
                 show_progress,
                 save_interval,
                 evaluators,
+                eval_env,
                 callback,
                 epoch_callback,
             )
@@ -435,6 +441,7 @@ class QLearningAlgoBase(
         show_progress: bool = True,
         save_interval: int = 1,
         evaluators: Optional[Dict[str, EvaluatorProtocol]] = None,
+        eval_env: Optional[GymEnv] = None,
         callback: Optional[Callable[[Self, int, int], None]] = None,
         epoch_callback: Optional[Callable[[Self, int, int], None]] = None,
     ) -> Generator[Tuple[int, Dict[str, float]], None, None]:
@@ -552,6 +559,14 @@ class QLearningAlgoBase(
                 for name, evaluator in evaluators.items():
                     test_score = evaluator(self, dataset)
                     logger.add_metric(name, test_score)
+            
+            # online evaluation
+            if eval_env:
+                eval_score, eval_power = evaluate_qlearning_with_energyplus(
+                    self, eval_env,
+                )
+                logger.add_metric("evaluation", eval_score)
+                logger.add_metric("total_power", eval_power)
 
             # save metrics
             metrics = logger.commit(epoch, total_step)
@@ -711,10 +726,11 @@ class QLearningAlgoBase(
             if epoch > 0 and total_step % n_steps_per_epoch == 0:
                 # evaluation
                 if eval_env:
-                    eval_score = evaluate_qlearning_with_environment(
-                        self, eval_env, epsilon=eval_epsilon
+                    eval_score, eval_power = evaluate_qlearning_with_energyplus(
+                        self, eval_env,
                     )
                     logger.add_metric("evaluation", eval_score)
+                    logger.add_metric("total_power", eval_power)
 
                 if epoch % save_interval == 0:
                     logger.save_model(total_step, self)
