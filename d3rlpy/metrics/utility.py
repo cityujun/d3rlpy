@@ -28,7 +28,10 @@ def evaluate_qlearning_with_energyplus(
         
         episode_reward += float(reward)
         if env_id == 'DataCenter':
-            episode_total_power.append(float(observation[-3] * 100))
+            if len(observation.shape) == 1:
+                episode_total_power.append(float(observation[-3] * 100))
+            elif len(observation.shape) == 2:
+                episode_total_power.append(float(observation[-1, -3] * 100))
         elif env_id == 'MixedUse':
             episode_total_power.append(float(info['obs']['Fa_Pw_All'] / 1000))
     
